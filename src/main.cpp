@@ -1,8 +1,14 @@
 #include <Arduino.h>
 #include <Adafruit_NeoPixel.h>
+// #include <ESP8266WiFi.h>
 
+
+// Led definitions
 #define LED_COUNT 150
 #define PIN D2
+
+const char* wifi_ssid     = WIFI_SSID;
+const char* wifi_password = WIFI_PASS;
 
 Adafruit_NeoPixel strip(LED_COUNT, PIN, NEO_GRB + NEO_KHZ800);
 
@@ -30,9 +36,12 @@ void loop() {
   for (int i = 0; i < strip.numPixels(); i++) {
     Serial.println(i);
 
+    Serial.println(wifi_ssid);
+    Serial.println(wifi_password);
+
     strip.setPixelColor(i, strip.Color(255, 0, 0 ));
     strip.show();
-    delay(100);
+    delay(500);
 
     strip.clear();
     strip.show();
