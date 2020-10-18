@@ -5,7 +5,7 @@ This is a personal poject with the purpose of building a light panel with a ESP8
 - Board ESP8266 (NodeMCU)
 - Leds (WS2812B)
 
-## Sofwares
+## Softwares
 - Visual Code
 - PlatformIO
 
@@ -17,10 +17,11 @@ This is a personal poject with the purpose of building a light panel with a ESP8
     export WIFI_SSID=XXXXXXXXXXXX
     export WIFI_PASS=XXXXXXXXXXXX
     ```
-| Need to restart your machine
+ > Need to restart your machine
 
 ## Todo
 - [x] Set up the environment
-- [ ] Test lights
-- [ ] Set up wifi
+- [x] Test lights
+- [ ] Connect to local Wifi
+- [ ] Set up webserver
 - [ ] Build light panel
