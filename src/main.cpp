@@ -1,14 +1,28 @@
 #include <Arduino.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_NeoMatrix.h>
 #include <Adafruit_NeoPixel.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
-
+#include <SPI.h>
+#include <Wire.h>
 
 // Led definitions
-#define LED_COUNT 150
+#define LED_COUNT 294
 #define PIN D2
 
+// Vars
+bool ledsOn = true;
+
 Adafruit_NeoPixel strip(LED_COUNT, PIN, NEO_GRB + NEO_KHZ800);
+
+Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(21, 14, PIN,
+  NEO_MATRIX_BOTTOM  + NEO_MATRIX_RIGHT +
+  NEO_MATRIX_ROWS    + NEO_MATRIX_ZIGZAG,
+  NEO_GRB            + NEO_KHZ800);
+
+const uint16_t colors[] = {
+  matrix.Color(255, 0, 0), matrix.Color(0, 255, 0), matrix.Color(0, 0, 255) };
 
 // Wifi
 const char* wifi_ssid     = WIFI_SSID;
@@ -17,10 +31,39 @@ const char* wifi_password = WIFI_PASS;
 // Web Server
 ESP8266WebServer server(80);
 
+String htmlContent = "\
+  <html>\
+    <title>Home Light Panel - Main page</title>\
+    <body>\
+    <h1>POST form data to /postform/</h1><br>\
+    <form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/postform/\">\
+      <input type=\"text\" name=\"hello\" value=\"world\"><br>\
+      <input type=\"submit\" value=\"Submit\">\
+    </form>\
+    </body>\
+  </html>\
+";
+
 void handleRoot() {
   digitalWrite(LED_BUILTIN, LOW);
-  server.send(200, "text/plain", "hello from esp8266!\r\n");
+
+  server.send(200, "text/html", htmlContent);
+
   digitalWrite(LED_BUILTIN, HIGH);
+}
+
+void handleLedsOn() {
+  ledsOn = true;
+
+  server.sendHeader("Location", "/", true);
+  server.send(302, "text/plain", "");
+}
+
+void handleLedsOff() {
+  ledsOn = false;
+
+  server.sendHeader("Location", "/", true);
+  server.send(302, "text/plain", "");
 }
 
 void handleNotFound() {
@@ -42,11 +85,14 @@ void handleNotFound() {
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
+/*******************************************************************/
+
 /*
  * Setup
  */
 
 void setup() {
+  // Set onboard led pin
   pinMode(LED_BUILTIN, OUTPUT);
 
   digitalWrite(LED_BUILTIN, HIGH);
@@ -54,7 +100,10 @@ void setup() {
   Serial.begin(115200);
 
 
-  //  Wifi
+  /*
+   *  Wifi
+   */
+
   Serial.print("Connecting to ");
   Serial.println(wifi_ssid);
 
@@ -65,7 +114,7 @@ void setup() {
   WiFi.begin(wifi_ssid, wifi_password);
 
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
+    delay(100);
     Serial.print(".");
   }
   Serial.println("");
@@ -74,24 +123,39 @@ void setup() {
   Serial.println(WiFi.localIP());
 
 
-  // Web Server
-  server.on("/", handleRoot);
+  /*
+   * Web Server
+   */
 
+  // Routes
+  server.on("/", handleRoot);
+  server.on("/on", handleLedsOn);
+  server.on("/off", handleLedsOff);
   server.onNotFound(handleNotFound);
 
+  // Server
   server.begin();
   Serial.println("HTTP server started");
 
 
-  // Leds
-  strip.begin();
-  strip.setBrightness(5);
-  strip.show();
+  /*
+   * Leds
+   */
+  matrix.begin();
+  matrix.setTextWrap(false);
+  matrix.setBrightness(5);
+  matrix.setTextColor(colors[0]);
+  // strip.begin();
+  // strip.setBrightness(5);
+  // strip.show();
+
   Serial.println("Strip LEDs started");
+
 
   Serial.println("=========== Init");
 }
 
+/*******************************************************************/
 
 /*
  * Functions
@@ -102,12 +166,14 @@ bool ledUp = true;
 
 void goAndBackTestLights() {
 
-  Serial.println("goAndBackTestLights Sequence. ");
+  Serial.println("");
+  Serial.print("goAndBackTestLights Sequence. ");
   Serial.print(ledIndex);
+  Serial.println("");
 
-  strip.setPixelColor(ledIndex, strip.Color(255, 0, 0 ));
+  strip.setPixelColor(ledIndex, strip.Color(24, 186, 181));
   strip.show();
-  delay(50);
+  delay(500);
 
   strip.clear();
   strip.show();
@@ -132,10 +198,14 @@ void goAndBackTestLights() {
 
 }
 
+/*******************************************************************/
 
 /*
  * Loop
  */
+
+int x    = matrix.width();
+int pass = 0;
 
 void loop() {
   Serial.println("=========== Start Loop");
@@ -148,7 +218,20 @@ void loop() {
   // digitalWrite(LED_BUILTIN, HIGH);
   // delay(1000);
 
-  goAndBackTestLights();
+  // if(ledsOn) {
+  //   goAndBackTestLights();
+  // }
+
+  matrix.fillScreen(0);
+  matrix.setCursor(x, 2);
+  matrix.print(F("- LIDIA -"));
+  if(--x < -36) {
+    x = matrix.width();
+    if(++pass >= 3) pass = 0;
+    matrix.setTextColor(colors[pass]);
+  }
+  matrix.show();
+  delay(150);
 
   Serial.println("=========== End Loop");
 }
