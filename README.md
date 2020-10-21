@@ -1,5 +1,5 @@
 # Light Panel with ESP8266 and WS2812B led strip
-This is a personal poject with the purpose of building a light panel with a ESP8266 and two stris of addressed leds (WS2812B)
+This is a personal project with the purpose of building a light panel with a ESP8266 and two stris of addressed leds (WS2812B)
 
 ## Materials
 - Board ESP8266 (NodeMCU)
@@ -17,7 +17,7 @@ This is a personal poject with the purpose of building a light panel with a ESP8
     export WIFI_SSID=XXXXXXXXXXXX
     export WIFI_PASS=XXXXXXXXXXXX
     ```
- > Need to restart your machine
+ > Needs to restart your machine
 
 ## Todo
 - [x] Set up the environment
@@ -36,6 +36,7 @@ This is a personal poject with the purpose of building a light panel with a ESP8
 - [ ] Merry Christmas mode
     Use GIF? https://github.com/marcmerlin/AnimatedGIFs
 - [ ] New Year Counter
+- [ ] Upload Projet photos
 
 ## References
 - Arduino - https://www.arduino.cc/reference/en/
