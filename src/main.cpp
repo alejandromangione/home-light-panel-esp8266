@@ -1,28 +1,54 @@
+// Needed to make NodeMCU work
+#define FASTLED_INTERRUPT_RETRY_COUNT 0
+#define FASTLED_ESP8266_RAW_PIN_ORDER
+
 #include <Arduino.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_NeoMatrix.h>
-#include <Adafruit_NeoPixel.h>
+#include <Wire.h>
+#include <Framebuffer_GFX.h>
+#include <FastLED.h>
+#include <FastLED_NeoMatrix.h>
+
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
-#include <SPI.h>
-#include <Wire.h>
 
 // Led definitions
 #define LED_COUNT 294
 #define PIN D2
 
-// Vars
-bool ledsOn = true;
+#define mw 21
+#define mh 14
+#define NUMMATRIX (mw*mh)
 
-Adafruit_NeoPixel strip(LED_COUNT, PIN, NEO_GRB + NEO_KHZ800);
+CRGB matrixleds[NUMMATRIX];
 
-Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(21, 14, PIN,
-  NEO_MATRIX_BOTTOM  + NEO_MATRIX_RIGHT +
-  NEO_MATRIX_ROWS    + NEO_MATRIX_ZIGZAG,
-  NEO_GRB            + NEO_KHZ800);
+FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(
+  matrixleds,
+  mw,
+  mh,
+  1,
+  1,
+  NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT +
+  NEO_MATRIX_ROWS + NEO_MATRIX_ZIGZAG);
 
 const uint16_t colors[] = {
-  matrix.Color(255, 0, 0), matrix.Color(0, 255, 0), matrix.Color(0, 0, 255) };
+  matrix->Color(255, 0, 0),
+  matrix->Color(0, 255, 0),
+  matrix->Color(0, 0, 255)
+};
+
+
+// Adafruit_NeoPixel strip(LED_COUNT, PIN, NEO_GRB + NEO_KHZ800);
+
+// Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(21, 14, PIN,
+//   NEO_MATRIX_BOTTOM  + NEO_MATRIX_RIGHT +
+//   NEO_MATRIX_ROWS    + NEO_MATRIX_ZIGZAG,
+//   NEO_GRB            + NEO_KHZ800);
+
+// const uint16_t colors[] = {
+//   matrix.Color(255, 0, 0), matrix.Color(0, 255, 0), matrix.Color(0, 0, 255) };
+
+// Vars
+bool ledsOn = true;
 
 // Wifi
 const char* wifi_ssid     = WIFI_SSID;
@@ -104,52 +130,63 @@ void setup() {
    *  Wifi
    */
 
-  Serial.print("Connecting to ");
-  Serial.println(wifi_ssid);
+  if(false) {
+    Serial.print("Connecting to ");
+    Serial.println(wifi_ssid);
 
-  /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
-     would try to act as both a client and an access-point and could cause
-     network-issues with your other WiFi-devices on your WiFi-network. */
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(wifi_ssid, wifi_password);
+    /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
+      would try to act as both a client and an access-point and could cause
+      network-issues with your other WiFi-devices on your WiFi-network. */
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(wifi_ssid, wifi_password);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
-    Serial.print(".");
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(100);
+      Serial.print(".");
+    }
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+
+
+    /*
+    * Web Server
+    */
+
+    // Routes
+    server.on("/", handleRoot);
+    server.on("/on", handleLedsOn);
+    server.on("/off", handleLedsOff);
+    server.onNotFound(handleNotFound);
+
+    // Server
+    server.begin();
+    Serial.println("HTTP server started");
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-
-
-  /*
-   * Web Server
-   */
-
-  // Routes
-  server.on("/", handleRoot);
-  server.on("/on", handleLedsOn);
-  server.on("/off", handleLedsOff);
-  server.onNotFound(handleNotFound);
-
-  // Server
-  server.begin();
-  Serial.println("HTTP server started");
-
 
   /*
    * Leds
    */
-  matrix.begin();
-  matrix.setTextWrap(false);
-  matrix.setBrightness(5);
-  matrix.setTextColor(colors[0]);
-  // strip.begin();
-  // strip.setBrightness(5);
-  // strip.show();
+  if(true) {
+    FastLED.addLeds<WS2812B, PIN, GRB>(matrixleds, NUMMATRIX);
 
-  Serial.println("Strip LEDs started");
+    // Start matrix
+    matrix->begin();
+    matrix->setTextWrap(false);
+    matrix->setBrightness(5);
+    matrix->setTextColor(colors[0]);
+
+    // matrix.begin();
+    // matrix.setTextWrap(false);
+    // matrix.setBrightness(5);
+    // matrix.setTextColor(colors[0]);
+    // strip.begin();
+    // strip.setBrightness(5);
+    // strip.show();
+
+    Serial.println("Strip LEDs started");
+  }
 
 
   Serial.println("=========== Init");
@@ -171,13 +208,13 @@ void goAndBackTestLights() {
   Serial.print(ledIndex);
   Serial.println("");
 
-  strip.setPixelColor(ledIndex, strip.Color(24, 186, 181));
-  strip.show();
-  delay(500);
-
-  strip.clear();
-  strip.show();
+  matrixleds[ledIndex] = CRGB::Red;
+  FastLED.show();
   delay(10);
+
+  matrixleds[ledIndex] = CRGB::Black;
+  FastLED.show();
+  delay(5);
 
   if (ledUp) {
     ledIndex++;
@@ -188,7 +225,7 @@ void goAndBackTestLights() {
   }
 
   // Change direction
-  if(ledIndex == strip.numPixels()) {
+  if(ledIndex == NUMMATRIX) {
     ledUp = false;
   }
 
@@ -204,13 +241,13 @@ void goAndBackTestLights() {
  * Loop
  */
 
-int x    = matrix.width();
+int x    = mw;
 int pass = 0;
 
 void loop() {
   Serial.println("=========== Start Loop");
 
-  server.handleClient();
+  // server.handleClient();
 
   // digitalWrite(LED_BUILTIN, LOW);
   // delay(500);
@@ -218,19 +255,29 @@ void loop() {
   // digitalWrite(LED_BUILTIN, HIGH);
   // delay(1000);
 
-  // if(ledsOn) {
-  //   goAndBackTestLights();
-  // }
-
-  matrix.fillScreen(0);
-  matrix.setCursor(x, 2);
-  matrix.print(F("- LIDIA -"));
-  if(--x < -36) {
-    x = matrix.width();
-    if(++pass >= 3) pass = 0;
-    matrix.setTextColor(colors[pass]);
+  if(ledsOn) {
+    goAndBackTestLights();
   }
-  matrix.show();
+
+  String text = "Alejandro Ferraiolo Mangione - Testing scrooling text!.";
+
+  matrix->fillScreen(0);
+  matrix->setCursor(x, 2);
+  matrix->print(text);
+
+  int textSize = text.length() * -6;
+
+  Serial.println("===========");
+  Serial.println(textSize);
+  Serial.println("===========");
+
+  // Character with space are 6 leds
+  if(--x < textSize) {
+    x = matrix->width();
+    if(++pass >= 3) pass = 0;
+    matrix->setTextColor(colors[pass]);
+  }
+  matrix->show();
   delay(150);
 
   Serial.println("=========== End Loop");

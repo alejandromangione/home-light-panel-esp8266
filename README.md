@@ -25,12 +25,14 @@ This is a personal poject with the purpose of building a light panel with a ESP8
 - [x] Connect to local Wifi
 - [x] Set up webserver
 - [ ] Create webpage to handle actions
-  - [ ] Mod selector (Text, New Year, Test Leds (default), etc)
+  - [ ] Mod selector (Text, New Year, Test Leds (default), etc) 
+    Use GIF? https://github.com/marcmerlin/AnimatedGIFs
   - [ ] Create asset host
   - [ ] On/off led sequence
   - [ ] Read text sequence
 - [x] Build light panel
 - [x] Add matrix leds
+   - [ ] Migrate to use FastLed. Based on (https://github.com/marcmerlin/FastLED_NeoMatrix)
 - [ ] Add text feature
 - [ ] Integrate to Google Assistant
 - [ ] New Year Counter
@@ -38,4 +40,5 @@ This is a personal poject with the purpose of building a light panel with a ESP8
 ## References
 - ESP8266WiFi - https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WiFi
 - ESP8266WebServer - https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer
-- Matrix - https://github.com/adafruit/Adafruit_NeoMatrix/blob/master/examples/matrixtest/matrixtest.ino
+- Led - https://github.com/FastLED/FastLED
+- Matrix - https://github.com/marcmerlin/FastLED_NeoMatrix
