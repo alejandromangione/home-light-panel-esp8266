@@ -37,18 +37,18 @@ const uint16_t colors[] = {
 };
 
 
-// Adafruit_NeoPixel strip(LED_COUNT, PIN, NEO_GRB + NEO_KHZ800);
-
-// Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(21, 14, PIN,
-//   NEO_MATRIX_BOTTOM  + NEO_MATRIX_RIGHT +
-//   NEO_MATRIX_ROWS    + NEO_MATRIX_ZIGZAG,
-//   NEO_GRB            + NEO_KHZ800);
-
-// const uint16_t colors[] = {
-//   matrix.Color(255, 0, 0), matrix.Color(0, 255, 0), matrix.Color(0, 0, 255) };
-
 // Vars
-bool ledsOn = true;
+/*
+ * Modes:
+ * 0. Zigzag light (default)
+ * 1. Scrooling text
+ */
+int mode = 0;
+
+String scroolingTextContent = "Hello World!";
+int x    = mw;
+int pass = 0;
+
 
 // Wifi
 const char* wifi_ssid     = WIFI_SSID;
@@ -57,37 +57,99 @@ const char* wifi_password = WIFI_PASS;
 // Web Server
 ESP8266WebServer server(80);
 
-String htmlContent = "\
-  <html>\
-    <title>Home Light Panel - Main page</title>\
-    <body>\
-    <h1>POST form data to /postform/</h1><br>\
-    <form method=\"post\" enctype=\"application/x-www-form-urlencoded\" action=\"/postform/\">\
-      <input type=\"text\" name=\"hello\" value=\"world\"><br>\
-      <input type=\"submit\" value=\"Submit\">\
-    </form>\
-    </body>\
-  </html>\
-";
-
 void handleRoot() {
   digitalWrite(LED_BUILTIN, LOW);
+
+  String htmlContent = R"(
+    <html>
+      <head>
+        <title>Home Light Panel - Main page</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://fonts.googleapis.com/css2?family=PT+Sans&display=swap" rel="stylesheet">
+        <style>
+          html, body {
+            font-family: 'PT Sans', sans-serif;
+          }
+          .block {
+            display: block;
+            margin: 10px;
+          }
+        </style>
+        <script>
+  )";
+
+  // Loading all values into the browser
+  htmlContent = htmlContent + "localStorage.mode = " + "\"" + mode + "\";";
+  htmlContent = htmlContent + "localStorage.scroolingTextContent = " + "\"" + scroolingTextContent + "\";";
+
+  htmlContent = htmlContent + R"(
+      </script>
+      </head>
+      <body>
+        <h1>Alex - Light Panel</h1><br>
+        <div class="block">
+          <label for="modeSwitcher">Select Mode:</label>
+          <select name="modeSwitcher">
+            <option value="0">Zigzag light</option>
+            <option value="1">Scrooling text</option>
+          </select>
+        </div>
+        <div class="mode-0"></div>
+        <div class="block mode-1" style="display: none;">
+          <form method="post" enctype="application/x-www-form-urlencoded" action="/update">
+            <label for="scroolingTextContent">Text content:</label>
+            <input type="text" name="scroolingTextContent" value=""><br>
+            <input type="submit" value="Submit">
+          </form>
+        </div>
+        <!-- Scripts -->
+        <script>
+          document.querySelector(`.mode-${localStorage.mode}`).style.display = 'block';
+          document.querySelector('[name=modeSwitcher]').selectedIndex = localStorage.mode;
+          document.querySelector('[name=modeSwitcher]').addEventListener('change', (e) => {
+            localStorage.mode = e.target.value;
+            window.location.href = `${window.location.href}mode?id=${e.target.value}`;
+          });
+
+          document.querySelector('[name=scroolingTextContent]').value = localStorage.scroolingTextContent;
+        </script>
+      </body>
+    </html>
+  )";
+
+  /*
+  * Notes:
+  * After some digging how to pass values to the webpage, I thought some methods such as
+  * concatenating the variables on the htmlContent or passing the value as data values ex."data-mode="myValue" and
+  * came up the idea of using localStore that way I don't need to pass the value to the server
+  * all value will be handled by the browser, let's see how that works. I found an issue, the approch is 
+  */
 
   server.send(200, "text/html", htmlContent);
 
   digitalWrite(LED_BUILTIN, HIGH);
 }
 
-void handleLedsOn() {
-  ledsOn = true;
+void handleSwitchMode() {
+  // Example of request /mode?id=0
+  if(server.args() > 0) {
+    mode =  server.arg(0).toInt();
 
+    FastLED.clear();
+    FastLED.show();
+  }
+
+  // Refirect to home
   server.sendHeader("Location", "/", true);
   server.send(302, "text/plain", "");
 }
 
-void handleLedsOff() {
-  ledsOn = false;
+void handleParams() {
+  for (uint8_t i = 0; i < server.args(); i++) {
+    if(server.argName(i) == "scroolingTextContent") scroolingTextContent = server.arg(i);
+  }
 
+  // Refirect to home
   server.sendHeader("Location", "/", true);
   server.send(302, "text/plain", "");
 }
@@ -129,41 +191,39 @@ void setup() {
   /*
    *  Wifi
    */
+  Serial.print("Connecting to ");
+  Serial.println(wifi_ssid);
 
-  if(false) {
-    Serial.print("Connecting to ");
-    Serial.println(wifi_ssid);
+  /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
+    would try to act as both a client and an access-point and could cause
+    network-issues with your other WiFi-devices on your WiFi-network. */
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(wifi_ssid, wifi_password);
 
-    /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
-      would try to act as both a client and an access-point and could cause
-      network-issues with your other WiFi-devices on your WiFi-network. */
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(wifi_ssid, wifi_password);
-
-    while (WiFi.status() != WL_CONNECTED) {
-      delay(100);
-      Serial.print(".");
-    }
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address: ");
-    Serial.println(WiFi.localIP());
-
-
-    /*
-    * Web Server
-    */
-
-    // Routes
-    server.on("/", handleRoot);
-    server.on("/on", handleLedsOn);
-    server.on("/off", handleLedsOff);
-    server.onNotFound(handleNotFound);
-
-    // Server
-    server.begin();
-    Serial.println("HTTP server started");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+    Serial.print(".");
   }
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+
+  /*
+  * Web Server
+  */
+
+  // Routes
+  server.on("/", handleRoot);
+  server.on("/mode", handleSwitchMode);
+  server.on("/update", handleParams);
+  server.onNotFound(handleNotFound);
+
+  // Server
+  server.begin();
+  Serial.println("HTTP server started");
+
 
   /*
    * Leds
@@ -201,12 +261,12 @@ void setup() {
 int ledIndex = 0;
 bool ledUp = true;
 
-void goAndBackTestLights() {
+void zigzagLedFX() {
 
-  Serial.println("");
-  Serial.print("goAndBackTestLights Sequence. ");
-  Serial.print(ledIndex);
-  Serial.println("");
+  // Serial.println("");
+  // Serial.print("zigzagLedFX Sequence. ");
+  // Serial.print(ledIndex);
+  // Serial.println("");
 
   matrixleds[ledIndex] = CRGB::Red;
   FastLED.show();
@@ -235,19 +295,34 @@ void goAndBackTestLights() {
 
 }
 
+void scrollingTextFX() {
+    matrix->fillScreen(0);
+    matrix->setCursor(x, 2);
+    matrix->print(scroolingTextContent);
+
+    int textSize = scroolingTextContent.length() * -6;
+
+    // Character with space are 6 leds
+    if(--x < textSize) {
+      x = matrix->width();
+      if(++pass >= 3) pass = 0;
+      matrix->setTextColor(colors[pass]);
+    }
+    matrix->show();
+    delay(150);
+}
+
 /*******************************************************************/
 
 /*
  * Loop
  */
 
-int x    = mw;
-int pass = 0;
-
 void loop() {
-  Serial.println("=========== Start Loop");
+  // Serial.println("=========== Start Loop");
 
-  // server.handleClient();
+  // Check http requests
+  server.handleClient();
 
   // digitalWrite(LED_BUILTIN, LOW);
   // delay(500);
@@ -255,30 +330,14 @@ void loop() {
   // digitalWrite(LED_BUILTIN, HIGH);
   // delay(1000);
 
-  if(ledsOn) {
-    goAndBackTestLights();
+  switch (mode) {
+    case 0:
+      zigzagLedFX();
+      break;
+    case 1:
+      scrollingTextFX();
+      break;
   }
 
-  String text = "Alejandro Ferraiolo Mangione - Testing scrooling text!.";
-
-  matrix->fillScreen(0);
-  matrix->setCursor(x, 2);
-  matrix->print(text);
-
-  int textSize = text.length() * -6;
-
-  Serial.println("===========");
-  Serial.println(textSize);
-  Serial.println("===========");
-
-  // Character with space are 6 leds
-  if(--x < textSize) {
-    x = matrix->width();
-    if(++pass >= 3) pass = 0;
-    matrix->setTextColor(colors[pass]);
-  }
-  matrix->show();
-  delay(150);
-
-  Serial.println("=========== End Loop");
+  // Serial.println("=========== End Loop");
 }
