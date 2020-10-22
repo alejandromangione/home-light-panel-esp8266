@@ -30,25 +30,26 @@ FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(
   NEO_MATRIX_BOTTOM + NEO_MATRIX_RIGHT +
   NEO_MATRIX_ROWS + NEO_MATRIX_ZIGZAG);
 
-const uint16_t colors[] = {
-  matrix->Color(255, 0, 0),
-  matrix->Color(0, 255, 0),
-  matrix->Color(0, 0, 255)
-};
-
-
 // Vars
 /*
  * Modes:
  * 0. Zigzag light (default)
  * 1. Scrooling text
+ * 2. Countdown Timer
+ * 3. Lines Test
  */
 int mode = 0;
 
-String scroolingTextContent = "Hello World!";
+boolean wifiEnabled = true;
+
+String scroolingTextContent = "Hellow World!";
+int scroolingTextSize = 1;
 int x    = mw;
 int pass = 0;
 
+// Clock Interval
+const long interval = 1000;
+unsigned long previousMillis = 0;
 
 // Wifi
 const char* wifi_ssid     = WIFI_SSID;
@@ -56,6 +57,8 @@ const char* wifi_password = WIFI_PASS;
 
 // Web Server
 ESP8266WebServer server(80);
+
+/*******************************************************************/
 
 void handleRoot() {
   digitalWrite(LED_BUILTIN, LOW);
@@ -81,6 +84,7 @@ void handleRoot() {
   // Loading all values into the browser
   htmlContent = htmlContent + "localStorage.mode = " + "\"" + mode + "\";";
   htmlContent = htmlContent + "localStorage.scroolingTextContent = " + "\"" + scroolingTextContent + "\";";
+  htmlContent = htmlContent + "localStorage.scroolingTextSize = " + "\"" + scroolingTextSize + "\";";
 
   htmlContent = htmlContent + R"(
       </script>
@@ -92,25 +96,40 @@ void handleRoot() {
           <select name="modeSwitcher">
             <option value="0">Zigzag light</option>
             <option value="1">Scrooling text</option>
+            <option value="2">Countdown timer</option>
+            <option value="3">Random Lines</option>
           </select>
         </div>
         <div class="mode-0"></div>
-        <div class="block mode-1" style="display: none;">
+        <div class="mode-1 block" style="display: none;">
           <form method="post" enctype="application/x-www-form-urlencoded" action="/update">
+
             <label for="scroolingTextContent">Text content:</label>
             <input type="text" name="scroolingTextContent" value=""><br>
+
+            <label for="scroolingTextSize">Text size:</label>
+            <select name="scroolingTextSize">
+              <option value="1">Normal</option>
+              <option value="2">Big</option>
+            </select>
+
             <input type="submit" value="Submit">
           </form>
         </div>
-        <!-- Scripts -->
+        <div class="mode-2"></div>
+        <div class="mode-3"></div>
+        <div class="mode-4"></div>
+        <!-- Script -->
         <script>
+          // Mode
           document.querySelector(`.mode-${localStorage.mode}`).style.display = 'block';
           document.querySelector('[name=modeSwitcher]').selectedIndex = localStorage.mode;
           document.querySelector('[name=modeSwitcher]').addEventListener('change', (e) => {
-            localStorage.mode = e.target.value;
             window.location.href = `${window.location.href}mode?id=${e.target.value}`;
           });
 
+          // Scrooling Text
+          document.querySelector('[name=scroolingTextSize]').selectedIndex = Number(localStorage.scroolingTextSize) - 1;
           document.querySelector('[name=scroolingTextContent]').value = localStorage.scroolingTextContent;
         </script>
       </body>
@@ -147,6 +166,7 @@ void handleSwitchMode() {
 void handleParams() {
   for (uint8_t i = 0; i < server.args(); i++) {
     if(server.argName(i) == "scroolingTextContent") scroolingTextContent = server.arg(i);
+    if(server.argName(i) == "scroolingTextSize") scroolingTextSize = server.arg(i).toInt();
   }
 
   // Refirect to home
@@ -191,63 +211,53 @@ void setup() {
   /*
    *  Wifi
    */
-  Serial.print("Connecting to ");
-  Serial.println(wifi_ssid);
+  if(wifiEnabled) {
+    Serial.print("Connecting to ");
+    Serial.println(wifi_ssid);
 
-  /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
-    would try to act as both a client and an access-point and could cause
-    network-issues with your other WiFi-devices on your WiFi-network. */
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(wifi_ssid, wifi_password);
+    /* Explicitly set the ESP8266 to be a WiFi-client, otherwise, it by default,
+      would try to act as both a client and an access-point and could cause
+      network-issues with your other WiFi-devices on your WiFi-network. */
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(wifi_ssid, wifi_password);
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
-    Serial.print(".");
+    while (WiFi.status() != WL_CONNECTED) {
+      delay(100);
+      Serial.print(".");
+    }
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+
+
+    /*
+    * Web Server
+    */
+
+    // Routes
+    server.on("/", handleRoot);
+    server.on("/mode", handleSwitchMode);
+    server.on("/update", handleParams);
+    server.onNotFound(handleNotFound);
+
+    // Server
+    server.begin();
+    Serial.println("HTTP server started");
   }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-
-
-  /*
-  * Web Server
-  */
-
-  // Routes
-  server.on("/", handleRoot);
-  server.on("/mode", handleSwitchMode);
-  server.on("/update", handleParams);
-  server.onNotFound(handleNotFound);
-
-  // Server
-  server.begin();
-  Serial.println("HTTP server started");
-
 
   /*
    * Leds
    */
-  if(true) {
-    FastLED.addLeds<WS2812B, PIN, GRB>(matrixleds, NUMMATRIX);
+  FastLED.addLeds<WS2812B, PIN, GRB>(matrixleds, NUMMATRIX);
 
-    // Start matrix
-    matrix->begin();
-    matrix->setTextWrap(false);
-    matrix->setBrightness(5);
-    matrix->setTextColor(colors[0]);
+  // Start matrix
+  matrix->begin();
+  matrix->setTextWrap(false);
+  matrix->setBrightness(4);
+  matrix->setTextColor(matrix->Color(255, 0, 0));
 
-    // matrix.begin();
-    // matrix.setTextWrap(false);
-    // matrix.setBrightness(5);
-    // matrix.setTextColor(colors[0]);
-    // strip.begin();
-    // strip.setBrightness(5);
-    // strip.show();
-
-    Serial.println("Strip LEDs started");
-  }
-
+  Serial.println("Strip LEDs started");
 
   Serial.println("=========== Init");
 }
@@ -255,18 +265,13 @@ void setup() {
 /*******************************************************************/
 
 /*
- * Functions
+ * Mods
  */
 
 int ledIndex = 0;
 bool ledUp = true;
 
 void zigzagLedFX() {
-
-  // Serial.println("");
-  // Serial.print("zigzagLedFX Sequence. ");
-  // Serial.print(ledIndex);
-  // Serial.println("");
 
   matrixleds[ledIndex] = CRGB::Red;
   FastLED.show();
@@ -295,9 +300,19 @@ void zigzagLedFX() {
 
 }
 
+const uint16_t colors[] = {
+  matrix->Color(255, 0, 0),
+  matrix->Color(0, 255, 0),
+  matrix->Color(0, 0, 255)
+};
+
 void scrollingTextFX() {
     matrix->fillScreen(0);
-    matrix->setCursor(x, 2);
+
+    if(scroolingTextSize == 1) matrix->setCursor(x, 3);
+    if(scroolingTextSize == 2) matrix->setCursor(x, 0);
+
+    matrix->setTextSize(scroolingTextSize);
     matrix->print(scroolingTextContent);
 
     int textSize = scroolingTextContent.length() * -6;
@@ -312,6 +327,103 @@ void scrollingTextFX() {
     delay(150);
 }
 
+//
+
+int textSize = 3;
+int countdownTimerValue = 9;
+int indexColor = 0;
+
+const uint16_t countdownTimerColors[] = {
+  matrix->Color(204, 102, 51), //  (2)
+  matrix->Color(255, 0, 0), //  (3)
+  matrix->Color(204, 51, 51)  //  (1)
+};
+
+void countdownTimerFX() {
+  matrix->fillScreen(0);
+
+  if(textSize == 3) matrix->setCursor(3, -4);
+  if(textSize == 2) matrix->setCursor(6, 0);
+  if(textSize == 1) matrix->setCursor(8, 4);
+
+  matrix->setTextSize(textSize);
+  matrix->print(countdownTimerValue);
+  matrix->setTextColor(countdownTimerColors[indexColor]);
+  matrix->show();
+
+  delay(200); // run 3 times
+
+  indexColor++;
+  if(indexColor > 2) indexColor = 0;
+
+  textSize--;
+
+  if(textSize < 1) {
+    textSize = 3;
+
+    // Extra delay when the text is small
+    delay(400);
+
+    countdownTimerValue--;
+
+    if(countdownTimerValue <= 0) countdownTimerValue = 9;
+  }
+}
+
+//
+
+const int vMax = 13; // Represents the base of the board
+const int hMax = 20;
+
+void randomLinesFX() {
+    matrix->fillScreen(0);
+    // matrix->setRotation(4);
+
+    // matrix->drawLine(
+    //   0,  // x0 -
+    //   0,  // y0 -
+    //   mw, // x1 - 21
+    //   mh, // x2 - 14
+    //   matrix->Color(0, 255, 0) // Color
+    // );
+
+    for(int i = 0; i < mw; i++) {
+      matrix->drawFastVLine(
+        i,
+        vMax,
+        random(0, vMax) * -1,
+        matrix->Color(
+          random(0, 255),
+          random(0, 255),
+          random(0, 255)
+        )
+      );
+    }
+
+    // matrix->drawFastVLine(0, 0, 12, matrix->Color(0, 255, 0));
+    // matrix->drawFastVLine(1, 0, 12, matrix->Color(0, 255, 0));
+
+    // Line 1
+    // matrix->drawFastHLine(
+    //   0,  // x0 -
+    //   0,  // y0 -
+    //   random(1, mh), // x2 - 14
+    //   matrix->Color(0, 255, 0) // Color
+    // );
+
+    // Line 2
+    // matrix->drawFastHLine(
+    //   1,  // x0 -
+    //   0,  // y0 -
+    //   random(1, mh), // x2 - 14
+    //   matrix->Color(0, 255, 0) // Color
+    // );
+
+    matrix->show();
+
+    delay(300);
+}
+
 /*******************************************************************/
 
 /*
@@ -322,7 +434,7 @@ void loop() {
   // Serial.println("=========== Start Loop");
 
   // Check http requests
-  server.handleClient();
+  if(wifiEnabled) server.handleClient();
 
   // digitalWrite(LED_BUILTIN, LOW);
   // delay(500);
@@ -336,6 +448,12 @@ void loop() {
       break;
     case 1:
       scrollingTextFX();
+      break;
+    case 2:
+      countdownTimerFX();
+      break;
+    case 3:
+      randomLinesFX();
       break;
   }
 

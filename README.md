@@ -36,7 +36,13 @@ This is a personal project with the purpose of building a light panel with a ESP
 - [ ] Merry Christmas mode
     Use GIF? https://github.com/marcmerlin/AnimatedGIFs
 - [ ] New Year Counter
-- [ ] Upload Projet photos
+    - [x] Countdown
+- [ ] Upload Project photos
+- [ ] Temperature
+- [ ] Clock
+   - https://randomnerdtutorials.com/interrupts-timers-esp8266-arduino-ide-nodemcu/
+   - http://worldtimeapi.org/api/timezone/America/Vancouver
+- [] Matrix background
 
 ## References
 - Arduino - https://www.arduino.cc/reference/en/
@@ -44,3 +50,4 @@ This is a personal project with the purpose of building a light panel with a ESP
 - ESP8266WebServer - https://github.com/esp8266/Arduino/tree/master/libraries/ESP8266WebServer
 - Led - https://github.com/FastLED/FastLED
 - Matrix - https://github.com/marcmerlin/FastLED_NeoMatrix
+- GFX library - https://cdn-learn.adafruit.com/downloads/pdf/adafruit-gfx-graphics-library.pdf
