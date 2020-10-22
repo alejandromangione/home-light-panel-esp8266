@@ -42,7 +42,7 @@ int mode = 0;
 
 boolean wifiEnabled = true;
 
-String scroolingTextContent = "Hellow World!";
+String scroolingTextContent = "Hello World!";
 int scroolingTextSize = 1;
 int x    = mw;
 int pass = 0;
