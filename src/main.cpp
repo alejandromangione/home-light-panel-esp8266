@@ -9,11 +9,29 @@
 #include <FastLED_NeoMatrix.h>
 
 #include <ESP8266WiFi.h>
+#include <ESP8266WiFiMulti.h>
 #include <ESP8266WebServer.h>
+#include <ESP8266mDNS.h>
+
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+// Data wire
+#define ONE_WIRE_BUS D3
+
+// Setup a oneWire instance to communicate with any OneWire
+// devices (not just Maxim/Dallas temperature ICs)
+OneWire oneWire(ONE_WIRE_BUS);
+
+// Pass our oneWire reference to Dallas Temperature.
+DallasTemperature sensors(&oneWire);
 
 // Led definitions
 #define LED_COUNT 294
-#define PIN D2
+
+// Pins definitions
+#define PIN D8
+#define BIG_SOUND_SENSOR_PIN D2
 
 #define mw 21
 #define mh 14
@@ -37,8 +55,11 @@ FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(
  * 1. Scrooling text
  * 2. Countdown Timer
  * 3. Lines Test
+ * 4. Dashboard
+ * 5. Draw
+ * 6. Clap Sensor
  */
-int mode = 0;
+int mode = 6;
 
 boolean wifiEnabled = true;
 
@@ -47,6 +68,10 @@ int scroolingTextSize = 1;
 int x    = mw;
 int pass = 0;
 
+// Maximum combination of numbers "0,0|0,1|0,2..." is 1176
+char drawPixels[1176] = "0,0|0,1";
+// 0,0|1,1|2,2|3,3|4,4|5,5
+
 // Clock Interval
 const long interval = 1000;
 unsigned long previousMillis = 0;
@@ -54,6 +79,9 @@ unsigned long previousMillis = 0;
 // Wifi
 const char* wifi_ssid     = WIFI_SSID;
 const char* wifi_password = WIFI_PASS;
+
+const char* zip_code             = ZIP_CODE;
+const char* openweathermap_appid = OPENWEATHERMAP_APPID;
 
 // Web Server
 ESP8266WebServer server(80);
@@ -66,16 +94,48 @@ void handleRoot() {
   String htmlContent = R"(
     <html>
       <head>
-        <title>Home Light Panel - Main page</title>
+        <title>Den Light Panel - Main page</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link href="https://fonts.googleapis.com/css2?family=PT+Sans&display=swap" rel="stylesheet">
         <style>
-          html, body {
-            font-family: 'PT Sans', sans-serif;
+          * {
+            font-family: Operator Mono SSm A,Operator Mono SSm B,Source Code Pro,Menlo,Consolas,Monaco,monospace;
           }
+
+          .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 1080px;
+            margin: 0 auto;
+            text-align: center;
+          }
+
           .block {
             display: block;
             margin: 10px;
+          }
+
+          div[class^="mode-"] {
+            display:none;
+          }
+
+          // Grid container
+          .grid-container {
+            margin: 10px auto;
+            display: block;
+            width: 315px;
+          }
+
+          .grid-row {
+            display: flex;
+          }
+
+          .grid-square {
+            border: 1px solid black;
+            width: 16px;
+            height: 16px;
+            display: block;
+            background: grey;
           }
         </style>
         <script>
@@ -85,63 +145,143 @@ void handleRoot() {
   htmlContent = htmlContent + "localStorage.mode = " + "\"" + mode + "\";";
   htmlContent = htmlContent + "localStorage.scroolingTextContent = " + "\"" + scroolingTextContent + "\";";
   htmlContent = htmlContent + "localStorage.scroolingTextSize = " + "\"" + scroolingTextSize + "\";";
+  htmlContent = htmlContent + "localStorage.drawPixels = " + "\"" + drawPixels + "\";";
 
   htmlContent = htmlContent + R"(
       </script>
       </head>
       <body>
-        <h1>Alex - Light Panel</h1><br>
-        <div class="block">
-          <label for="modeSwitcher">Select Mode:</label>
-          <select name="modeSwitcher">
-            <option value="0">Zigzag light</option>
-            <option value="1">Scrooling text</option>
-            <option value="2">Countdown timer</option>
-            <option value="3">Random Lines</option>
-          </select>
-        </div>
-        <div class="mode-0"></div>
-        <div class="mode-1 block" style="display: none;">
-          <form method="post" enctype="application/x-www-form-urlencoded" action="/update">
-
-            <label for="scroolingTextContent">Text content:</label>
-            <input type="text" name="scroolingTextContent" value=""><br>
-
-            <label for="scroolingTextSize">Text size:</label>
-            <select name="scroolingTextSize">
-              <option value="1">Normal</option>
-              <option value="2">Big</option>
+        <div class="container">
+          <h1>Den - Light Panel</h1><br>
+          <div class="block">
+            <label for="modeSwitcher">Select Mode:</label>
+            <select name="modeSwitcher">
+              <option value="0">Zigzag light</option>
+              <option value="1">Scrooling text</option>
+              <option value="2">Countdown timer</option>
+              <option value="3">Random Lines</option>
+              <option value="4">Dashboard</option>
+              <option value="5">Draw</option>
             </select>
+          </div>
+          <div class="mode-0"></div>
+          <div class="mode-1">
+            <form method="post" enctype="application/x-www-form-urlencoded" action="/update">
 
-            <input type="submit" value="Submit">
-          </form>
+              <label for="scroolingTextContent">Text content:</label>
+              <input type="text" name="scroolingTextContent" value=""><br>
+
+              <label for="scroolingTextSize">Text size:</label>
+              <select name="scroolingTextSize">
+                <option value="1">Normal</option>
+                <option value="2">Big</option>
+              </select>
+
+              <input type="submit" value="Submit">
+            </form>
+          </div>
+          <div class="mode-2"></div>
+          <div class="mode-3"></div>
+          <div class="mode-4"></div>
+          <div class="mode-5">
+            <div class="grid-container"></div>
+          </div>
         </div>
-        <div class="mode-2"></div>
-        <div class="mode-3"></div>
-        <div class="mode-4"></div>
+
         <!-- Script -->
         <script>
-          // Mode
-          document.querySelector(`.mode-${localStorage.mode}`).style.display = 'block';
+          // Mode Selector
+          document.querySelector(`.mode-${localStorage.mode}`).style.display = 'flex';
           document.querySelector('[name=modeSwitcher]').selectedIndex = localStorage.mode;
           document.querySelector('[name=modeSwitcher]').addEventListener('change', (e) => {
             window.location.href = `${window.location.href}mode?id=${e.target.value}`;
           });
 
-          // Scrooling Text
+          // Load values from the localStorage
           document.querySelector('[name=scroolingTextSize]').selectedIndex = Number(localStorage.scroolingTextSize) - 1;
           document.querySelector('[name=scroolingTextContent]').value = localStorage.scroolingTextContent;
+
+          // Grid logic
+          let gridContainer = document.querySelector('.grid-container');
+          let matrix = [];
+
+          const rows = 14;
+          const columns = 21;
+
+          for(let r = 0; r < rows; r++) {
+            let gridRow = document.createElement('div');
+
+            gridRow.className = 'grid-row';
+
+            matrix[r] = [];
+
+            for(let c = 0; c < columns; c++) {
+              let gridSquare = document.createElement('div');
+
+              gridSquare.className = 'grid-square';
+              gridSquare.dataset.posX = r;
+              gridSquare.dataset.posY = c;
+
+              matrix[r].push(0);
+
+              gridSquare.addEventListener('click', (el) => {
+
+                if(el.target.style.background == "red") {
+                  el.target.style.background = "grey";
+
+                  matrix[el.target.dataset.posX][el.target.dataset.posY] = 0;
+                } else {
+                  el.target.style.background = "red";
+
+                  matrix[el.target.dataset.posX][el.target.dataset.posY] = 1;
+                }
+
+                matrixValues = "";
+
+                for(let i = 0; i < rows; i++ ){
+                  for(let j = 0; j < columns; j++ ){
+                    if(matrix[i][j] == 1) {
+                      matrixValues += `${i},${j}|`;
+                    }
+                  }
+                }
+
+                const xhr = new XMLHttpRequest();
+
+                xhr.open("POST", '/update', true);
+                xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+                xhr.send(`drawPixels=${matrixValues}`);
+              })
+
+              gridRow.appendChild(gridSquare);
+            }
+
+            gridContainer.appendChild(gridRow);
+          }
+
+          // Load values from localStorage
+          const loadedDrawPixel = localStorage.drawPixels.split('|');
+
+          loadedDrawPixel.forEach((el) => {
+            if (el === "") return;
+
+            const arrEl = el.split(',');
+
+            matrix[arrEl[0]][arrEl[1]] = 1;
+            document.querySelector(`[data-pos-x="${arrEl[0]}"][data-pos-y="${arrEl[1]}"]`).style.background = "red";
+          });
         </script>
       </body>
     </html>
   )";
 
   /*
+  * api.openweathermap.org/data/2.5/weather?zip=v7p,ca&appid=66912f2b3e431b54c1c1122d7440080f&units=metric
   * Notes:
   * After some digging how to pass values to the webpage, I thought some methods such as
   * concatenating the variables on the htmlContent or passing the value as data values ex."data-mode="myValue" and
   * came up the idea of using localStore that way I don't need to pass the value to the server
-  * all value will be handled by the browser, let's see how that works. I found an issue, the approch is 
+  * all value will be handled by the browser, let's see how that works.
   */
 
   server.send(200, "text/html", htmlContent);
@@ -167,6 +307,7 @@ void handleParams() {
   for (uint8_t i = 0; i < server.args(); i++) {
     if(server.argName(i) == "scroolingTextContent") scroolingTextContent = server.arg(i);
     if(server.argName(i) == "scroolingTextSize") scroolingTextSize = server.arg(i).toInt();
+    if(server.argName(i) == "drawPixels") server.arg(i).toCharArray(drawPixels, 1176);
   }
 
   // Refirect to home
@@ -200,13 +341,14 @@ void handleNotFound() {
  */
 
 void setup() {
+
   // Set onboard led pin
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(BIG_SOUND_SENSOR_PIN, INPUT);
 
   digitalWrite(LED_BUILTIN, HIGH);
 
   Serial.begin(115200);
-
 
   /*
    *  Wifi
@@ -225,9 +367,12 @@ void setup() {
       delay(100);
       Serial.print(".");
     }
+
     Serial.println("");
+    Serial.print("Connected to ");
+    Serial.println(WiFi.SSID());
     Serial.println("WiFi connected");
-    Serial.println("IP address: ");
+    Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
 
 
@@ -244,6 +389,12 @@ void setup() {
     // Server
     server.begin();
     Serial.println("HTTP server started");
+
+
+    if (!MDNS.begin("esp8266")) {             // Start the mDNS responder for esp8266.local
+      Serial.println("Error setting up MDNS responder!");
+    }
+    Serial.println("mDNS responder started");
   }
 
   /*
@@ -258,6 +409,16 @@ void setup() {
   matrix->setTextColor(matrix->Color(255, 0, 0));
 
   Serial.println("Strip LEDs started");
+
+  /*
+   * Temperature Sensor
+   */
+  sensors.begin();
+
+  Serial.println("Sensor started");
+
+  Serial.println(zip_code);
+  Serial.println(openweathermap_appid);
 
   Serial.println("=========== Init");
 }
@@ -424,6 +585,80 @@ void randomLinesFX() {
     delay(300);
 }
 
+/*
+ * Dashboard
+ */
+
+void dashboard() {
+  matrix->fillScreen(0);
+  textSize = 1;
+
+  // if(textSize == 3) matrix->setCursor(3, -4);
+  // if(textSize == 2) matrix->setCursor(6, 0);
+  matrix->setCursor(0, 0);
+
+  matrix->setTextSize(textSize);
+  matrix->print("00:00");
+  matrix->setTextColor(
+    matrix->Color(204, 102, 51)
+  );
+  matrix->show();
+}
+
+
+/*
+ * DrawFX
+ */
+
+// char str[] = "1,90|2,80|3,180|53,1|4,2";     // test sample serial input from servo
+int pixelPosX;
+int pixelPosY;
+
+void drawFX() {
+  matrix->fillScreen(0);
+
+  // Check if drawPixels is not empty
+  if (strcmp(drawPixels, "") != 0) {
+
+    char* p = drawPixels;
+    while (sscanf(p, "%d,%d", &pixelPosX, &pixelPosY) == 2) {
+      matrix->writePixel(
+        pixelPosY,
+        pixelPosX,
+        matrix->Color(0, 255, 0)
+      );
+
+      while (*p && *p++ != '|');   // to next id/pos pair
+    }
+  }
+
+  matrix->show();
+}
+
+/*
+ * Clap Sensor
+ */
+
+int counter = 0;
+
+void clapFX() {
+
+  int sensorData = digitalRead(BIG_SOUND_SENSOR_PIN);
+
+    if(sensorData == 1) {
+
+      matrix->writePixel(
+        counter,
+        0,
+        matrix->Color(0, 255, 0)
+      );
+      matrix->show();
+
+      counter++;
+    }
+
+}
+
 /*******************************************************************/
 
 /*
@@ -454,6 +689,15 @@ void loop() {
       break;
     case 3:
       randomLinesFX();
+      break;
+    case 4:
+      dashboard();
+      break;
+    case 5:
+      drawFX();
+      break;
+    case 6:
+      clapFX();
       break;
   }
 
