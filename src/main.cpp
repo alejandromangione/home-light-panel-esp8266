@@ -58,8 +58,10 @@ FastLED_NeoMatrix *matrix = new FastLED_NeoMatrix(
  * 4. Dashboard
  * 5. Draw
  * 6. Clap Sensor
+ * 7. Mic Status
  */
-int mode = 6;
+
+int mode = 7;
 
 boolean wifiEnabled = true;
 
@@ -69,8 +71,11 @@ int x    = mw;
 int pass = 0;
 
 // Maximum combination of numbers "0,0|0,1|0,2..." is 1176
-char drawPixels[1176] = "0,0|0,1";
+// 1176
+//char drawPixels[] = "0,0|1,1|2,2|3,3|4,4|5,5";
+char drawPixels[1176] = "0,0|1,1";
 // 0,0|1,1|2,2|3,3|4,4|5,5
+// 0,0|0,1
 
 // Clock Interval
 const long interval = 1000;
@@ -162,6 +167,7 @@ void handleRoot() {
               <option value="3">Random Lines</option>
               <option value="4">Dashboard</option>
               <option value="5">Draw</option>
+              <option value="6">Mic Status</option>
             </select>
           </div>
           <div class="mode-0"></div>
@@ -185,6 +191,9 @@ void handleRoot() {
           <div class="mode-4"></div>
           <div class="mode-5">
             <div class="grid-container"></div>
+          </div>
+          <div class="mode-7">
+             <h1>Mic Mode</h1>
           </div>
         </div>
 
@@ -315,6 +324,19 @@ void handleParams() {
   server.send(302, "text/plain", "");
 }
 
+int micStatus = 0;
+
+void handleMicStatus() {
+  // for (uint8_t i = 0; i < server.args(); i++) {
+
+  // }
+  if(server.argName(0) == "status") micStatus = server.arg(0).toInt();
+
+  mode = 7;
+
+  server.send(200, "text/plain", "ok");
+}
+
 void handleNotFound() {
   digitalWrite(LED_BUILTIN, LOW);
 
@@ -384,6 +406,7 @@ void setup() {
     server.on("/", handleRoot);
     server.on("/mode", handleSwitchMode);
     server.on("/update", handleParams);
+    server.on("/mic", handleMicStatus);
     server.onNotFound(handleNotFound);
 
     // Server
@@ -659,6 +682,24 @@ void clapFX() {
 
 }
 
+/*
+ * Mic Status
+ */
+
+void micScreen() {
+  String micPic;
+
+  if(micStatus == 0) {
+   micPic = "0,0|0,1";
+  } else {
+   micPic = "0,0|0,1|0,2|0,3|0,4|0,5|0,6|0,7|0,8|0,9|0,10|0,11|0,12|0,13|0,14|0,15|0,16|0,17|0,18|0,19|0,20|1,0|1,20|2,0|2,8|2,9|2,20|3,0|3,7|3,8|3,9|3,12|3,14|3,20|4,0|4,6|4,7|4,8|4,9|4,13|4,15|4,20|5,0|5,3|5,5|5,6|5,7|5,8|5,9|5,14|5,16|5,20|6,0|6,3|6,4|6,5|6,6|6,7|6,8|6,9|6,14|6,16|6,20|7,0|7,3|7,4|7,5|7,6|7,7|7,8|7,9|7,14|7,16|7,20|8,0|8,3|8,5|8,6|8,7|8,8|8,9|8,14|8,16|8,20|9,0|9,6|9,7|9,8|9,9|9,13|9,15|9,20|10,0|10,7|10,8|10,9|10,12|10,14|10,20|11,0|11,8|11,9|11,20|12,0|12,20|13,0|13,1|13,2|13,3|13,4|13,5|13,6|13,7|13,8|13,9|13,10|13,11|13,12|13,13|13,14|13,15|13,16|13,17|13,18|13,19|13,20|";
+  }
+
+  micPic.toCharArray(drawPixels, 1176);
+
+  drawFX();
+}
+
 /*******************************************************************/
 
 /*
@@ -698,6 +739,9 @@ void loop() {
       break;
     case 6:
       clapFX();
+      break;
+    case 7:
+      micScreen();
       break;
   }
 
